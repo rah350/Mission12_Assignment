@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Book } from './types/Book';
+import { Book } from '../types/Book';
 import 'bootstrap/dist/css/bootstrap.min.css'; // Import Bootstrap CSS
+import { CartItem } from '../types/CartItem';
+import { useCart } from '../context/CartContext';
+import { useNavigate } from 'react-router-dom';
+import { Tooltip } from 'bootstrap';
+import { Toast } from 'bootstrap'; // at the top
 
 function BookList({ selectedCategories }: { selectedCategories: string[] }) {
   const [books, setBooks] = useState<Book[]>([]);
@@ -9,6 +14,31 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
   const [totalItems, setTotalItems] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<string>('asc');
+
+  const navigate = useNavigate();
+
+  const { addToCart } = useCart();
+  const [price, setPrice] = useState<number>(0);
+
+  const handleAddToCart = (book: Book) => {
+    const newItem: CartItem = {
+      bookId: book.bookID,
+      title: book.title || 'No Book Found',
+      price: book.price,
+    };
+
+    addToCart(newItem);
+
+    // Show toast
+    const toastElement = document.getElementById('cart-toast');
+    if (toastElement) {
+      const toast = new Toast(toastElement);
+      toast.show();
+    }
+
+    // Optional: comment out navigation if you want to stay on the page
+    // navigate('/cart');
+  };
 
   useEffect(() => {
     const fetchBooks = async () => {
@@ -27,6 +57,15 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
 
     fetchBooks();
   }, [pageSize, pageNum, sortOrder, totalItems, selectedCategories]);
+
+  useEffect(() => {
+    const tooltipTriggerList = Array.from(
+      document.querySelectorAll('[data-bs-toggle="tooltip"]')
+    );
+    tooltipTriggerList.forEach((tooltipTriggerEl) => {
+      new Tooltip(tooltipTriggerEl);
+    });
+  }, [books]);
 
   return (
     <div className="container mt-4">
@@ -82,13 +121,30 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
           <tbody>
             {books.map((b) => (
               <tr key={b.bookID}>
-                <td>{b.title}</td>
+                <td>
+                  <span
+                    data-bs-toggle="tooltip"
+                    data-bs-placement="top"
+                    title={`ISBN: ${b.isbn}\nPages: ${b.pageCount}`}
+                  >
+                    {b.title}
+                  </span>
+                </td>
+
                 <td>{b.author}</td>
                 <td>{b.publisher}</td>
                 <td>{b.isbn}</td>
                 <td>{b.category}</td>
                 <td>{b.pageCount}</td>
                 <td>${b.price.toFixed(2)}</td>
+                <td>
+                  <button
+                    className="btn btn-success btn-sm"
+                    onClick={() => handleAddToCart(b)}
+                  >
+                    ➕ Add to Cart
+                  </button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -130,6 +186,28 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
           </li>
         </ul>
       </nav>
+      <div
+        className="toast-container position-fixed bottom-0 end-0 p-3"
+        style={{ zIndex: 1055 }}
+      >
+        <div
+          className="toast align-items-center text-white bg-success border-0"
+          id="cart-toast"
+          role="alert"
+          aria-live="assertive"
+          aria-atomic="true"
+        >
+          <div className="d-flex">
+            <div className="toast-body">✅ Book added to cart!</div>
+            <button
+              type="button"
+              className="btn-close btn-close-white me-2 m-auto"
+              data-bs-dismiss="toast"
+              aria-label="Close"
+            ></button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
