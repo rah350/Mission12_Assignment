@@ -6,14 +6,21 @@ import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { Tooltip } from 'bootstrap';
 import { Toast } from 'bootstrap'; // at the top
+import NewBookForm from './NewBookForm';
+import EditBookForm from './EditBookForm';
+import { deleteBook, fetchBooks } from '../api/BooksAPI';
 
 function BookList({ selectedCategories }: { selectedCategories: string[] }) {
   const [books, setBooks] = useState<Book[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [pageSize, setPageSize] = useState<number>(10);
   const [pageNum, setPageNum] = useState<number>(1);
   const [totalItems, setTotalItems] = useState<number>(0);
   const [totalPages, setTotalPages] = useState<number>(0);
   const [sortOrder, setSortOrder] = useState<string>('asc');
+  const [showForm, setShowForm] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
 
   const navigate = useNavigate();
 
@@ -40,23 +47,43 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
     // navigate('/cart');
   };
 
-  useEffect(() => {
-    const fetchBooks = async () => {
-      const categoryParams = selectedCategories
-        .map((cat) => `bookCategories=${encodeURIComponent(cat)}`)
-        .join('&');
+  const handleDelete = async (bookID: number) => {
+    const confirmDelete = window.confirm(
+      'Are you sure you want to delete this book?'
+    );
+    if (!confirmDelete) return;
 
-      const response = await fetch(
-        `https://localhost:44344/api/Book/AllBooks?pageSize=${pageSize}&pageNum=${pageNum}&sortOrder=${sortOrder}${selectedCategories.length ? `&${categoryParams}` : ''}`
-      );
-      const data = await response.json();
-      setBooks(data.books);
-      setTotalItems(data.totalNumBooks);
-      setTotalPages(Math.ceil(totalItems / pageSize));
+    try {
+      await deleteBook(bookID);
+      setBooks(books.filter((b) => b.bookID !== bookID));
+    } catch (error) {
+      alert('Failed to delete book. Please try again.');
+    }
+  };
+
+  useEffect(() => {
+    const loadBooks = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await fetchBooks(
+          pageSize,
+          pageNum,
+          selectedCategories,
+          sortOrder
+        );
+        setBooks(data.books);
+        setTotalItems(data.totalNumBooks);
+        setTotalPages(Math.ceil(data.totalNumBooks / pageSize));
+      } catch (error) {
+        setError('Failed to load books. Please try again.');
+      } finally {
+        setLoading(false);
+      }
     };
 
-    fetchBooks();
-  }, [pageSize, pageNum, sortOrder, totalItems, selectedCategories]);
+    loadBooks();
+  }, [pageSize, pageNum, sortOrder, selectedCategories]);
 
   useEffect(() => {
     const tooltipTriggerList = Array.from(
@@ -66,6 +93,9 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
       new Tooltip(tooltipTriggerEl);
     });
   }, [books]);
+
+  if (loading) return <p> Loading Books...</p>;
+  if (error) return <p className="text-red-500">Error: {error}</p>;
 
   return (
     <div className="container mt-4">
@@ -104,6 +134,40 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
         </div>
       </div>
 
+      {!showForm && (
+        <button
+          className="btn btn-success mb-3"
+          onClick={() => setShowForm(true)}
+        >
+          Add Book
+        </button>
+      )}
+
+      {showForm && (
+        <NewBookForm
+          onSuccess={() => {
+            setShowForm(false);
+            fetchBooks(pageSize, pageNum, []).then((data) =>
+              setBooks(data.books)
+            );
+          }}
+          onCancel={() => setShowForm(false)}
+        />
+      )}
+
+      {editingBook && (
+        <EditBookForm
+          book={editingBook}
+          onSuccess={() => {
+            setEditingBook(null);
+            fetchBooks(pageSize, pageNum, []).then((data) =>
+              setBooks(data.books)
+            );
+          }}
+          onCancel={() => setEditingBook(null)}
+        />
+      )}
+
       {/* Book Table */}
       <div className="table-responsive">
         <table className="table table-striped table-hover">
@@ -116,6 +180,8 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
               <th>Category</th>
               <th>Page Count</th>
               <th>Price</th>
+              <th></th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
@@ -143,6 +209,20 @@ function BookList({ selectedCategories }: { selectedCategories: string[] }) {
                     onClick={() => handleAddToCart(b)}
                   >
                     ➕ Add to Cart
+                  </button>
+                </td>
+                <td>
+                  <button
+                    className="btn btn-primary btn-sm w-100 mb-1"
+                    onClick={() => setEditingBook(b)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    className="btn btn-danger btn-sm w-100"
+                    onClick={() => handleDelete(b.bookID)}
+                  >
+                    Delete
                   </button>
                 </td>
               </tr>
